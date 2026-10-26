@@ -1,0 +1,502 @@
+"""All enumerations used by models, services and APIs.
+
+Every fixed set of values lives here. Models store them in db.Enum(...) columns,
+which are native PostgreSQL enum types, so the database rejects anything else.
+"""
+import enum
+
+
+class StrEnum(str, enum.Enum):
+    def __str__(self):
+        return self.value
+
+    @classmethod
+    def values(cls):
+        return [m.value for m in cls]
+
+
+# ---------------------------------------------------------------- records
+class RecordStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+
+
+# ------------------------------------------------------------ users & auth
+class UserType(StrEnum):
+    PLATFORM_ADMIN = "PLATFORM_ADMIN"
+    STAFF = "STAFF"  # university / college admins and users (via memberships)
+    STUDENT = "STUDENT"
+
+
+class Role(StrEnum):
+    """The six business roles. Derived from user type + membership."""
+    PLATFORM_ADMIN = "PLATFORM_ADMIN"
+    UNIVERSITY_ADMIN = "UNIVERSITY_ADMIN"
+    UNIVERSITY_USER = "UNIVERSITY_USER"
+    COLLEGE_ADMIN = "COLLEGE_ADMIN"
+    COLLEGE_USER = "COLLEGE_USER"
+    STUDENT = "STUDENT"
+
+
+class AccountState(StrEnum):
+    PENDING_VERIFICATION = "PENDING_VERIFICATION"  # email OTP not done
+    PENDING_APPROVAL = "PENDING_APPROVAL"  # admin awaiting approver
+    ACTIVE = "ACTIVE"
+    LOCKED = "LOCKED"
+    SUSPENDED = "SUSPENDED"
+    REJECTED = "REJECTED"
+
+
+class MembershipRole(StrEnum):
+    ADMIN = "ADMIN"
+    USER = "USER"
+
+
+class ApprovalStatus(StrEnum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
+class SessionEndReason(StrEnum):
+    LOGOUT = "LOGOUT"
+    NEW_LOGIN = "NEW_LOGIN"
+    PASSWORD_RESET = "PASSWORD_RESET"
+    PASSWORD_CHANGED = "PASSWORD_CHANGED"
+    DEACTIVATED = "DEACTIVATED"
+    FORCED = "FORCED"
+    EXPIRED = "EXPIRED"
+
+
+class OtpPurpose(StrEnum):
+    EMAIL_VERIFICATION = "EMAIL_VERIFICATION"
+    LOGIN_2FA = "LOGIN_2FA"
+    PARENT_CONSENT = "PARENT_CONSENT"
+
+
+class TokenPurpose(StrEnum):
+    PASSWORD_RESET = "PASSWORD_RESET"
+
+
+class InvitationPurpose(StrEnum):
+    UNIVERSITY_ADMIN = "UNIVERSITY_ADMIN"  # path A / B
+    COLLEGE_ADMIN = "COLLEGE_ADMIN"
+    STANDALONE_ADMIN = "STANDALONE_ADMIN"
+    UNIVERSITY_USER = "UNIVERSITY_USER"
+    COLLEGE_USER = "COLLEGE_USER"
+    PLATFORM_ADMIN = "PLATFORM_ADMIN"
+
+
+class InvitationState(StrEnum):
+    SENT = "SENT"
+    ACCEPTED = "ACCEPTED"
+    EXPIRED = "EXPIRED"
+    REVOKED = "REVOKED"
+
+
+class Permission(StrEnum):
+    # institution administration
+    MANAGE_INSTITUTION_USERS = "MANAGE_INSTITUTION_USERS"
+    CREATE_COLLEGE = "CREATE_COLLEGE"
+    APPROVE_COLLEGE_REGISTRATION = "APPROVE_COLLEGE_REGISTRATION"
+    MANAGE_COLLEGE_STATUS = "MANAGE_COLLEGE_STATUS"
+    # academics
+    MANAGE_COURSES = "MANAGE_COURSES"
+    MANAGE_SYLLABUS = "MANAGE_SYLLABUS"
+    MANAGE_ACADEMIC_RULES = "MANAGE_ACADEMIC_RULES"  # eligibility, grading, windows, years, offer mode
+    APPROVE_COURSE_OFFERING = "APPROVE_COURSE_OFFERING"
+    REQUEST_COURSE_OFFERING = "REQUEST_COURSE_OFFERING"
+    MANAGE_VACANCIES = "MANAGE_VACANCIES"
+    MANAGE_INTERVIEW_HOURS = "MANAGE_INTERVIEW_HOURS"
+    BULK_UPLOAD = "BULK_UPLOAD"
+    MANAGE_LETTER_BRANDING = "MANAGE_LETTER_BRANDING"
+    # students / source side
+    VERIFY_ENROLMENT = "VERIFY_ENROLMENT"
+    DECIDE_NOC = "DECIDE_NOC"
+    ISSUE_RELEASE = "ISSUE_RELEASE"  # TC (college) / migration certificate (university)
+    # destination side
+    REVIEW_REQUEST = "REVIEW_REQUEST"
+    VERIFY_DOCUMENTS = "VERIFY_DOCUMENTS"
+    ASSESS_CREDITS = "ASSESS_CREDITS"
+    CONDUCT_INTERVIEW = "CONDUCT_INTERVIEW"
+    RECOMMEND_REQUEST = "RECOMMEND_REQUEST"
+    APPROVE_ENTRY = "APPROVE_ENTRY"
+    CONFIRM_ADMISSION = "CONFIRM_ADMISSION"
+    VERIFY_ORIGINALS = "VERIFY_ORIGINALS"
+    OVERRIDE_ELIGIBILITY = "OVERRIDE_ELIGIBILITY"
+    DECIDE_APPEAL = "DECIDE_APPEAL"
+    CANCEL_ADMISSION = "CANCEL_ADMISSION"
+    APPROVE_CANCELLATION = "APPROVE_CANCELLATION"
+    # oversight
+    VIEW_REPORTS = "VIEW_REPORTS"
+    VIEW_AUDIT_LOGS = "VIEW_AUDIT_LOGS"
+
+
+class PermissionBundle(StrEnum):
+    ENROLMENT_VERIFIER = "ENROLMENT_VERIFIER"
+    DOCUMENT_VERIFIER = "DOCUMENT_VERIFIER"
+    REVIEWER = "REVIEWER"
+    CREDIT_ASSESSOR = "CREDIT_ASSESSOR"
+    INTERVIEWER = "INTERVIEWER"
+    APPROVER = "APPROVER"
+    VACANCY_MANAGER = "VACANCY_MANAGER"
+    ACADEMIC_MANAGER = "ACADEMIC_MANAGER"  # university users
+    UNIVERSITY_APPROVER = "UNIVERSITY_APPROVER"
+    REPORT_VIEWER = "REPORT_VIEWER"
+
+
+# ---------------------------------------------------------- institutions
+class InstitutionKind(StrEnum):
+    """Which table an institution lives in: universities or colleges.
+
+    The colleges table holds COLLEGE, STANDALONE, PM_VIDYALAXMI and R&D rows
+    (colleges.institution_type, plain text). A college with no university_id has
+    no parent university: the Platform Admin approves it, like a standalone institution.
+    """
+    UNIVERSITY = "UNIVERSITY"
+    COLLEGE = "COLLEGE"
+
+
+class LocationType(enum.Enum):
+    """From load_universities.py (stored as 'Urban' / 'Rural')."""
+    URBAN = "Urban"
+    RURAL = "Rural"
+
+
+class OnboardingStatus(StrEnum):
+    MASTER = "MASTER"  # imported, nobody onboarded yet
+    PENDING = "PENDING"  # registration awaiting approval
+    ACTIVE = "ACTIVE"
+    REJECTED = "REJECTED"
+    SUSPENDED = "SUSPENDED"
+
+
+class InstitutionSource(StrEnum):
+    AISHE_IMPORT = "AISHE_IMPORT"
+    MANUAL = "MANUAL"
+
+
+class RegistrationPath(StrEnum):
+    DIRECT = "DIRECT"  # path A, created by approver
+    INVITE_LINK = "INVITE_LINK"  # path B
+    REQUEST = "REQUEST"  # path C, public form
+
+
+class ImportDataset(StrEnum):
+    UNIVERSITIES = "UNIVERSITIES"
+    COLLEGES = "COLLEGES"
+    STANDALONE = "STANDALONE"
+    PINCODES = "PINCODES"
+
+
+class ImportRowOutcome(StrEnum):
+    IMPORTED = "IMPORTED"
+    UPDATED = "UPDATED"
+    DUPLICATE = "DUPLICATE"
+    UNMATCHED_AFFILIATION = "UNMATCHED_AFFILIATION"
+    INVALID = "INVALID"
+
+
+# ------------------------------------------------------------- academics
+class CourseLevel(StrEnum):
+    DIPLOMA = "DIPLOMA"
+    UNDERGRADUATE = "UNDERGRADUATE"
+    POSTGRADUATE = "POSTGRADUATE"
+    INTEGRATED = "INTEGRATED"
+    DOCTORAL = "DOCTORAL"
+
+
+class OfferMode(StrEnum):
+    MERIT_ROUND = "MERIT_ROUND"
+    ROLLING = "ROLLING"
+
+
+class GradeSystem(StrEnum):
+    PERCENTAGE = "PERCENTAGE"
+    CGPA_10 = "CGPA_10"
+    CGPA_4 = "CGPA_4"
+    GRADE_LETTER = "GRADE_LETTER"
+
+
+class ReservationCategory(StrEnum):
+    OPEN = "OPEN"
+    SC = "SC"
+    ST = "ST"
+    OBC_NCL = "OBC_NCL"
+    EWS = "EWS"
+    PWD = "PWD"
+
+
+class SeatState(StrEnum):
+    AVAILABLE = "AVAILABLE"
+    BLOCKED = "BLOCKED"
+    FILLED = "FILLED"
+
+
+class Gender(StrEnum):
+    FEMALE = "FEMALE"
+    MALE = "MALE"
+    OTHER = "OTHER"
+    UNDISCLOSED = "UNDISCLOSED"
+
+
+# ------------------------------------------------------------ students
+class EnrolmentStatus(StrEnum):
+    NOT_SUBMITTED = "NOT_SUBMITTED"
+    PENDING = "PENDING"
+    VERIFIED = "VERIFIED"
+    REJECTED = "REJECTED"
+
+
+class VerificationStatus(StrEnum):
+    PENDING = "PENDING"
+    VERIFIED = "VERIFIED"
+    REJECTED = "REJECTED"
+    CORRECTION_REQUESTED = "CORRECTION_REQUESTED"
+
+
+# ------------------------------------------------------------ migration
+class MigrationType(StrEnum):
+    SAME_UNIVERSITY = "SAME_UNIVERSITY"
+    CROSS_UNIVERSITY = "CROSS_UNIVERSITY"
+
+
+class MigrationStatus(StrEnum):
+    DRAFT = "DRAFT"
+    SUBMITTED = "SUBMITTED"  # awaiting source NOC
+    NOC_GRANTED = "NOC_GRANTED"  # awaiting destination review
+    UNDER_REVIEW = "UNDER_REVIEW"
+    RETURNED_FOR_CORRECTION = "RETURNED_FOR_CORRECTION"
+    INTERVIEW_SCHEDULED = "INTERVIEW_SCHEDULED"
+    RECOMMENDED = "RECOMMENDED"  # awaiting destination university
+    ENTRY_APPROVED = "ENTRY_APPROVED"  # awaiting seat allocation (merit round)
+    WAITLISTED = "WAITLISTED"
+    PROVISIONAL_OFFER = "PROVISIONAL_OFFER"
+    OFFER_ACCEPTED = "OFFER_ACCEPTED"  # awaiting source release
+    RELEASED = "RELEASED"
+    ADMITTED_ORIGINALS_PENDING = "ADMITTED_ORIGINALS_PENDING"
+    ADMITTED = "ADMITTED"  # originals verified, final
+    APPEALED = "APPEALED"
+    REJECTED = "REJECTED"
+    WITHDRAWN = "WITHDRAWN"
+    OFFER_DECLINED = "OFFER_DECLINED"
+    OFFER_EXPIRED = "OFFER_EXPIRED"
+    CANCELLED = "CANCELLED"
+
+
+class EligibilityResult(StrEnum):
+    PENDING = "PENDING"
+    ELIGIBLE = "ELIGIBLE"
+    INELIGIBLE = "INELIGIBLE"
+    MANUAL_REVIEW = "MANUAL_REVIEW"
+    OVERRIDDEN = "OVERRIDDEN"
+
+
+class NocRefusalReason(StrEnum):
+    DISCIPLINARY_ACTION_PENDING = "DISCIPLINARY_ACTION_PENDING"
+    DUES_PENDING = "DUES_PENDING"
+    ENROLMENT_NOT_VALID = "ENROLMENT_NOT_VALID"
+    MINIMUM_SEMESTERS_NOT_COMPLETED = "MINIMUM_SEMESTERS_NOT_COMPLETED"
+
+
+class ConversionSource(StrEnum):
+    SAME_SYSTEM = "SAME_SYSTEM"
+    FORMULA = "FORMULA"
+    CERTIFICATE = "CERTIFICATE"
+
+
+class CreditDecision(StrEnum):
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+
+
+class AppealDecision(StrEnum):
+    PENDING = "PENDING"
+    UPHELD = "UPHELD"
+    REFUSED = "REFUSED"
+
+
+class CancellationStage(StrEnum):
+    BEFORE_ADMISSION = "BEFORE_ADMISSION"
+    AFTER_ADMISSION = "AFTER_ADMISSION"
+    NON_REPORTING = "NON_REPORTING"
+
+
+# ------------------------------------------------------------ documents
+class DocumentType(StrEnum):
+    PHOTO = "PHOTO"
+    ID_PROOF = "ID_PROOF"
+    CLASS_10_MARKSHEET = "CLASS_10_MARKSHEET"
+    CLASS_12_MARKSHEET = "CLASS_12_MARKSHEET"
+    SEMESTER_MARKSHEET = "SEMESTER_MARKSHEET"
+    ENROLMENT_PROOF = "ENROLMENT_PROOF"
+    CONVERSION_CERTIFICATE = "CONVERSION_CERTIFICATE"
+    CATEGORY_CERTIFICATE = "CATEGORY_CERTIFICATE"
+    GAP_CERTIFICATE = "GAP_CERTIFICATE"
+    ABC_CREDIT_STATEMENT = "ABC_CREDIT_STATEMENT"
+    ANTI_RAGGING_AFFIDAVIT = "ANTI_RAGGING_AFFIDAVIT"
+    NOC = "NOC"
+    TRANSFER_CERTIFICATE = "TRANSFER_CERTIFICATE"
+    MIGRATION_CERTIFICATE = "MIGRATION_CERTIFICATE"
+    ELIGIBILITY_CERTIFICATE = "ELIGIBILITY_CERTIFICATE"
+    AUTHORIZATION_LETTER = "AUTHORIZATION_LETTER"
+    GRADING_CIRCULAR = "GRADING_CIRCULAR"
+    INSTITUTION_SEAL = "INSTITUTION_SEAL"
+    APPEAL_EVIDENCE = "APPEAL_EVIDENCE"
+    SUPPORT_ATTACHMENT = "SUPPORT_ATTACHMENT"
+    OTHER = "OTHER"
+
+
+class DocumentOwnerType(StrEnum):
+    USER = "USER"
+    UNIVERSITY = "UNIVERSITY"
+    COLLEGE = "COLLEGE"
+    MIGRATION_REQUEST = "MIGRATION_REQUEST"
+    REGISTRATION_REQUEST = "REGISTRATION_REQUEST"
+    SUPPORT_TICKET = "SUPPORT_TICKET"
+    APPEAL = "APPEAL"
+
+
+class LetterType(StrEnum):
+    NOC = "NOC"
+    PROVISIONAL_OFFER = "PROVISIONAL_OFFER"
+    ADMISSION_CONFIRMATION = "ADMISSION_CONFIRMATION"
+    REJECTION = "REJECTION"
+    RELEASE_CONFIRMATION = "RELEASE_CONFIRMATION"
+
+
+class LetterStatus(StrEnum):
+    VALID = "VALID"
+    CANCELLED = "CANCELLED"
+
+
+# ------------------------------------------------------------ interviews
+class InterviewMode(StrEnum):
+    ONLINE = "ONLINE"
+    IN_PERSON = "IN_PERSON"
+
+
+class InterviewStatus(StrEnum):
+    SCHEDULED = "SCHEDULED"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+    NO_SHOW = "NO_SHOW"
+    RESCHEDULED = "RESCHEDULED"
+
+
+class InterviewOutcome(StrEnum):
+    PENDING = "PENDING"
+    PASSED = "PASSED"
+    FAILED = "FAILED"
+
+
+class Weekday(StrEnum):
+    MON = "MON"
+    TUE = "TUE"
+    WED = "WED"
+    THU = "THU"
+    FRI = "FRI"
+    SAT = "SAT"
+    SUN = "SUN"
+
+
+# --------------------------------------------------------- notifications
+class NotificationChannel(StrEnum):
+    EMAIL = "EMAIL"
+    SMS = "SMS"
+    WHATSAPP = "WHATSAPP"
+    IN_APP = "IN_APP"
+
+
+class NotificationState(StrEnum):
+    QUEUED = "QUEUED"
+    SENT = "SENT"
+    FAILED = "FAILED"
+    RETRYING = "RETRYING"
+
+
+class NotificationEvent(StrEnum):
+    REGISTRATION_PENDING_APPROVAL = "REGISTRATION_PENDING_APPROVAL"
+    REGISTRATION_DECIDED = "REGISTRATION_DECIDED"
+    ACCESS_REQUEST_PENDING = "ACCESS_REQUEST_PENDING"
+    ACCESS_REQUEST_DECIDED = "ACCESS_REQUEST_DECIDED"
+    INVITATION_SENT = "INVITATION_SENT"
+    INVITATION_EXPIRING = "INVITATION_EXPIRING"
+    SECOND_ADMIN_CLAIM = "SECOND_ADMIN_CLAIM"
+    OTP = "OTP"
+    PASSWORD_CHANGED = "PASSWORD_CHANGED"
+    PASSWORD_RESET = "PASSWORD_RESET"
+    ACCOUNT_LOCKED = "ACCOUNT_LOCKED"
+    ENROLMENT_VERIFICATION_REQUESTED = "ENROLMENT_VERIFICATION_REQUESTED"
+    ENROLMENT_VERIFICATION_DECIDED = "ENROLMENT_VERIFICATION_DECIDED"
+    COLLEGE_ONBOARDING_REQUESTED = "COLLEGE_ONBOARDING_REQUESTED"
+    REQUEST_SUBMITTED = "REQUEST_SUBMITTED"
+    NOC_REQUESTED = "NOC_REQUESTED"
+    NOC_DECIDED = "NOC_DECIDED"
+    NOC_ESCALATED = "NOC_ESCALATED"
+    RETURNED_FOR_CORRECTION = "RETURNED_FOR_CORRECTION"
+    DOCUMENT_DECIDED = "DOCUMENT_DECIDED"
+    INTERVIEW_SCHEDULED = "INTERVIEW_SCHEDULED"
+    INTERVIEW_RESCHEDULED = "INTERVIEW_RESCHEDULED"
+    INTERVIEW_CANCELLED = "INTERVIEW_CANCELLED"
+    INTERVIEW_REMINDER = "INTERVIEW_REMINDER"
+    NO_SHOW_RECORDED = "NO_SHOW_RECORDED"
+    RECOMMENDED = "RECOMMENDED"
+    WAITLISTED = "WAITLISTED"
+    OFFER_ISSUED = "OFFER_ISSUED"
+    OFFER_EXPIRING = "OFFER_EXPIRING"
+    OFFER_ACCEPTED = "OFFER_ACCEPTED"
+    RELEASE_REQUESTED = "RELEASE_REQUESTED"
+    RELEASE_OVERDUE = "RELEASE_OVERDUE"
+    ADMITTED = "ADMITTED"
+    ORIGINALS_DEADLINE = "ORIGINALS_DEADLINE"
+    REQUEST_REJECTED = "REQUEST_REJECTED"
+    REQUEST_CANCELLED = "REQUEST_CANCELLED"
+    APPEAL_FILED = "APPEAL_FILED"
+    APPEAL_DECIDED = "APPEAL_DECIDED"
+    OFFERING_REQUEST_PENDING = "OFFERING_REQUEST_PENDING"
+    OFFERING_REQUEST_DECIDED = "OFFERING_REQUEST_DECIDED"
+    SUPPORT_TICKET_RAISED = "SUPPORT_TICKET_RAISED"
+    SUPPORT_TICKET_ANSWERED = "SUPPORT_TICKET_ANSWERED"
+    INTERVIEW_LINK_UPDATED = "INTERVIEW_LINK_UPDATED"
+    GENERIC = "GENERIC"
+
+
+# --------------------------------------------------------------- platform
+class ActivityOutcome(StrEnum):
+    SUCCESS = "SUCCESS"
+    FAILURE = "FAILURE"
+
+
+class TicketCategory(StrEnum):
+    GENERAL = "GENERAL"
+    TECHNICAL = "TECHNICAL"
+    GRIEVANCE = "GRIEVANCE"
+    DATA_REQUEST = "DATA_REQUEST"
+
+
+class TicketState(StrEnum):
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    RESOLVED = "RESOLVED"
+    CLOSED = "CLOSED"
+
+
+class DataRequestType(StrEnum):
+    DOWNLOAD = "DOWNLOAD"
+    CORRECTION = "CORRECTION"
+    ERASURE = "ERASURE"
+
+
+class DataRequestState(StrEnum):
+    OPEN = "OPEN"
+    COMPLETED = "COMPLETED"
+    REJECTED = "REJECTED"
+
+
+class BulkUploadType(StrEnum):
+    VACANCIES = "VACANCIES"
+    COURSES = "COURSES"
+    SYLLABUS_SUBJECTS = "SYLLABUS_SUBJECTS"
+    COURSE_EQUIVALENCES = "COURSE_EQUIVALENCES"
