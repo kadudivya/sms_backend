@@ -20,8 +20,8 @@ from app.core.institutions import (COLLEGE, STANDALONE, find_by_aishe, get_insti
 from app.models import (College, CollegeOnboardingRequest, District, InstitutionMembership,
                         Invitation, RegistrationRequest, State, University, User)
 from app.services import otp as otp_service
-from app.services.directory import (has_active_admin, institution_admins, platform_admins,
-                                    primary_admin)
+from app.services.directory import (_approved_members, has_active_admin, institution_admins,
+                                    platform_admins, primary_admin)
 from app.services.documents import store_upload
 from app.services.notifications import notify, notify_email_address
 from app.core.auth import membership_institution
@@ -341,12 +341,15 @@ def _open_registration(inst, user, path, invitation, designation, official_email
                               manual_details=None)
     db.session.add(reg)
     db.session.flush()
-    if letter_file is None:
-        raise ValidationError("An authorization letter signed by the Registrar or Principal is required",
-                              error_code="AUTHORIZATION_LETTER_REQUIRED")
-    doc = store_upload(letter_file, DocumentOwnerType.REGISTRATION_REQUEST, reg.id,
-                       DocumentType.AUTHORIZATION_LETTER)
-    reg.authorization_letter_id = doc.id
+    has_file = letter_file is not None and bool(getattr(letter_file, "filename", None))
+    if not has_file:
+        if path == RegistrationPath.INVITE_LINK:
+            raise ValidationError("An authorization letter signed by the Registrar or Principal is required",
+                                  error_code="AUTHORIZATION_LETTER_REQUIRED")
+    else:
+        doc = store_upload(letter_file, DocumentOwnerType.REGISTRATION_REQUEST, reg.id,
+                           DocumentType.AUTHORIZATION_LETTER)
+        reg.authorization_letter_id = doc.id
     activity.step("Registration request opened", entity="registration_request", entity_id=reg.id,
                   second_claim=second_claim, approver_university_id=reg.approver_university_id)
     _notify_approvers(reg, inst, user)
@@ -476,7 +479,10 @@ def submit_registration_request(data, letter_file):
     code = data["aishe_code"].strip().upper()
     inst = lookup_institution(code, reg_type)
     manual = False
+    inv = None
     if inst is None:
+        if reg_type == "UNIVERSITY":
+            raise ValidationError("University does not exist.", error_code="UNIVERSITY_NOT_FOUND")
         details = dict(data.get("institution") or {})
         if reg_type == "COLLEGE":
             parent = lookup_institution(details.get("parent_university_aishe_code") or "", "UNIVERSITY")
@@ -488,15 +494,28 @@ def submit_registration_request(data, letter_file):
         manual = True
     elif inst.onboarding_status == OnboardingStatus.SUSPENDED:
         raise BusinessRuleViolation("This institution is suspended", error_code="INSTITUTION_SUSPENDED")
+    elif reg_type == "UNIVERSITY" and inst.onboarding_status == OnboardingStatus.PENDING:
+        inv = (Invitation.query
+               .filter(
+                   (Invitation.university_id == inst.id) | (func.upper(Invitation.aishe_code) == code),
+                   Invitation.invitation_state.in_([InvitationState.SENT, InvitationState.ACCEPTED]),
+                   Invitation.status == RecordStatus.ACTIVE
+               )
+               .order_by(Invitation.created_at.desc())
+               .first())
+        requester_email = (data.get("official_email") or data.get("email") or "").strip().lower()
+        if not inv or inv.email.strip().lower() != requester_email:
+            raise BusinessRuleViolation("You are not invited for this University.", error_code="NOT_INVITED")
+
     user = _new_user(data["email"], data["full_name"], data["password"], data.get("mobile"),
                      data.get("designation"), UserType.STAFF)
     membership = InstitutionMembership(user_id=user.id, **ref(inst), role=MembershipRole.ADMIN,
                                        is_primary=primary_admin(inst) is None, joined_via="REGISTRATION",
                                        approval_status=ApprovalStatus.PENDING)
     db.session.add(membership)
-    if inst.onboarding_status in (OnboardingStatus.MASTER, OnboardingStatus.REJECTED):
+    if reg_type != "UNIVERSITY" and inst.onboarding_status in (OnboardingStatus.MASTER, OnboardingStatus.REJECTED):
         inst.onboarding_status = OnboardingStatus.PENDING
-    reg = _open_registration(inst, user, RegistrationPath.REQUEST, None, data.get("designation"),
+    reg = _open_registration(inst, user, RegistrationPath.REQUEST, inv, data.get("designation"),
                              data.get("official_email") or user.email, letter_file, manual)
     code_sent = otp_service.issue_otp(user, OtpPurpose.EMAIL_VERIFICATION)
     db.session.commit()
@@ -525,6 +544,7 @@ def visible_registrations(actor):
 
 
 def approve_registration(actor, reg, note=None):
+    from app.core.auth import end_all_sessions
     _require_reviewer(actor, reg)
     if reg.approval_status != ApprovalStatus.PENDING:
         raise BusinessRuleViolation("This request was already decided", error_code="ALREADY_DECIDED")
@@ -532,10 +552,23 @@ def approve_registration(actor, reg, note=None):
     if is_affiliated(inst) and not is_operational(inst.university):
         raise BusinessRuleViolation("The parent university is not active", error_code="UNIVERSITY_NOT_ACTIVE")
     membership = _membership_of(reg.requester_id, inst)
-    if reg.is_second_claim or primary_admin(inst) is not None:
-        membership.is_primary = False
-    else:
+    if is_university(inst):
+        existing_admins = [
+            m for m in _approved_members(inst)
+            if m.role == MembershipRole.ADMIN and m.id != membership.id
+        ]
+        for old_m in existing_admins:
+            old_m.is_primary = False
+            deactivate(old_m)
+            other_active = [m for m in old_m.user.memberships if m.id != old_m.id and is_active(m)]
+            if not other_active and old_m.user.user_type == UserType.STAFF:
+                end_all_sessions(old_m.user, SessionEndReason.DEACTIVATED)
         membership.is_primary = True
+    else:
+        if reg.is_second_claim or primary_admin(inst) is not None:
+            membership.is_primary = False
+        else:
+            membership.is_primary = True
     _approve_membership(membership, actor.user.id)
     _activate_institution(inst, reg.requester)
     reg.approval_status = ApprovalStatus.APPROVED
@@ -567,9 +600,13 @@ def reject_registration(actor, reg, reason):
     user = reg.requester
     if not any(m.approval_status == ApprovalStatus.APPROVED and is_active(m) for m in user.memberships):
         user.account_state = AccountState.REJECTED
-    if not has_active_admin(inst) and inst.onboarding_status == OnboardingStatus.PENDING:
-        inst.onboarding_status = (OnboardingStatus.REJECTED if inst.source == InstitutionSource.MANUAL
-                                  else OnboardingStatus.MASTER)
+    if is_university(inst):
+        if not has_active_admin(inst) and inst.onboarding_status == OnboardingStatus.PENDING:
+            inst.onboarding_status = OnboardingStatus.MASTER
+    else:
+        if not has_active_admin(inst) and inst.onboarding_status == OnboardingStatus.PENDING:
+            inst.onboarding_status = (OnboardingStatus.REJECTED if inst.source == InstitutionSource.MANUAL
+                                      else OnboardingStatus.MASTER)
     reg.approval_status = ApprovalStatus.REJECTED
     reg.reviewer_id = actor.user.id
     reg.reviewed_at = utcnow()
