@@ -522,6 +522,22 @@ class Invitation(db.Model):
                 value = getattr(self, column.name)
                 data[column.name] = value.value if isinstance(value, enum.Enum) else value
         return data
+    
+class NewInvitation(db.Model):
+    __tablename__ = "new_invitations"
+    id = db.Column(db.BigInteger, primary_key=True)
+    aishe_code = db.Column(db.String(20))
+    email = db.Column(db.String(255), nullable=False, index=True)
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "aishe_code": self.aishe_code,
+            "email": self.email
+    }
+    
+  
+        
+    
 
 
 class RegistrationRequest(db.Model):
