@@ -65,6 +65,17 @@ class RegistrationSchema(Schema):
     institution = fields.Nested(InstitutionDetailsSchema)
 
 
+class CreateUniversitySchema(Schema):
+    aishe_code = fields.String(required=True, validate=validate.Length(min=1, max=20))
+    name = fields.String(required=True, validate=validate.Length(min=3, max=500))
+    state_id = fields.Integer(required=True)
+    district_id = fields.Integer(required=True)
+    website = fields.URL(required=True, schemes={"http", "https"}, validate=validate.Length(max=500))
+    year_of_establishment = fields.Integer(allow_none=True, validate=validate.Range(min=1000, max=9999))
+    location_type = fields.String(required=True, validate=validate.OneOf(["Urban", "Rural"]))
+    address_line = fields.String(allow_none=True, validate=validate.Length(max=500))
+
+
 class DecisionSchema(Schema):
     note = fields.String(validate=validate.Length(max=1000))
 
@@ -143,6 +154,13 @@ def create_university():
         data.get("institution"))
     return created({"institution": svc.institution_card(inst), "invitation_id": inv.id, **debug},
                    "University ready; admin invited")
+
+@bp.post("/universities/master")
+@api("CREATE_UNIVERSITY_MASTER", roles=[Role.PLATFORM_ADMIN])
+def create_university_master():
+    data = load(CreateUniversitySchema)
+    inst = svc.create_university_master(g.actor, data)
+    return created(svc.institution_card(inst), "University created")
 
 
 @bp.post("/standalone-institutions")

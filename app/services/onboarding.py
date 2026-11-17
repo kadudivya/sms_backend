@@ -8,10 +8,11 @@ from app.core.errors import (BusinessRuleViolation, Conflict, NotFound, Permissi
                              ValidationError)
 from app.core.permissions import COLLEGE_USER_GRANTABLE, UNIVERSITY_USER_GRANTABLE, expand
 from app.core.security import generate_token, hash_password, hash_token, verify_password
-from app.core.utils import email_domain, ensure_aware, utcnow, valid_aishe, valid_pincode
+from app.core.utils import email_domain, ensure_aware, today_ist, utcnow, valid_aishe, valid_pincode
 from app.enums import (AccountState, ApprovalStatus, DocumentOwnerType, DocumentType,
                        InstitutionKind, InstitutionSource, InvitationPurpose, InvitationState,
-                       MembershipRole, NotificationEvent, OnboardingStatus, OtpPurpose, Permission,
+                       LocationType, MembershipRole, NotificationEvent, OnboardingStatus, OtpPurpose,
+                       Permission,
                        RegistrationPath, SessionEndReason, UserType)
 from app.extensions import db
 from app.core.institutions import (COLLEGE, STANDALONE, find_by_aishe, get_institution, is_affiliated,
@@ -136,6 +137,33 @@ def create_manual_institution(aishe_code, reg_type, details, onboarding=Onboardi
     db.session.flush()
     activity.step("Created institution from manual details", entity=kind.value.lower(), entity_id=inst.id,
                   aishe_code=code, pincode_verified=pin_known)
+    return inst
+
+def create_university_master(actor, data):
+    """Platform Admin form: create a university as MASTER (not onboarded). No admin, no invitation."""
+    if not actor.is_platform_admin:
+        raise PermissionDenied("Only the Platform Admin can create universities")
+    code = data["aishe_code"].strip().upper()
+    if not valid_aishe(code, "UNIVERSITY"):
+        raise ValidationError("AISHE code must look like U-1234", error_code="INVALID_AISHE_CODE")
+    if University.query.filter(University.aishe_code == code).first():
+        raise Conflict("A university with this AISHE code already exists", error_code="DUPLICATE_AISHE")
+    district = db.session.get(District, data["district_id"])
+    if district is None or district.state_id != data["state_id"]:
+        raise ValidationError("District does not belong to the state", error_code="INVALID_DISTRICT")
+    year = data.get("year_of_establishment")
+    if year and year > today_ist().year:
+        raise ValidationError("Year of establishment cannot be in the future", error_code="INVALID_YEAR")
+    inst = University(
+        aishe_code=code, name=data["name"].strip(), state_id=data["state_id"], district_id=data["district_id"],
+        website=data["website"], year_of_establishment=year,
+        location=LocationType(data["location_type"]), address_line=data.get("address_line"),
+        onboarding_status=OnboardingStatus.PENDING, created_by_id=actor.user.id)
+    db.session.add(inst)
+    db.session.flush()
+    activity.step("University created from the platform form", entity="university", entity_id=inst.id,
+                  aishe_code=code)
+    db.session.commit()
     return inst
 
 
