@@ -246,6 +246,33 @@ def create_manual_institution(
     )
     return inst
 
+def create_university_master(actor, data):
+    """Platform Admin form: create a university as MASTER (not onboarded). No admin, no invitation."""
+    if not actor.is_platform_admin:
+        raise PermissionDenied("Only the Platform Admin can create universities")
+    code = data["aishe_code"].strip().upper()
+    if not valid_aishe(code, "UNIVERSITY"):
+        raise ValidationError("AISHE code must look like U-1234", error_code="INVALID_AISHE_CODE")
+    if University.query.filter(University.aishe_code == code).first():
+        raise Conflict("A university with this AISHE code already exists", error_code="DUPLICATE_AISHE")
+    district = db.session.get(District, data["district_id"])
+    if district is None or district.state_id != data["state_id"]:
+        raise ValidationError("District does not belong to the state", error_code="INVALID_DISTRICT")
+    year = data.get("year_of_establishment")
+    if year and year > today_ist().year:
+        raise ValidationError("Year of establishment cannot be in the future", error_code="INVALID_YEAR")
+    inst = University(
+        aishe_code=code, name=data["name"].strip(), state_id=data["state_id"], district_id=data["district_id"],
+        website=data["website"], year_of_establishment=year,
+        location=LocationType(data["location_type"]), address_line=data.get("address_line"),
+        onboarding_status=OnboardingStatus.PENDING, created_by_id=actor.user.id)
+    db.session.add(inst)
+    db.session.flush()
+    activity.step("University created from the platform form", entity="university", entity_id=inst.id,
+                  aishe_code=code)
+    db.session.commit()
+    return inst
+
 
 # ------------------------------------------------------------ invitations
 def _invite_link(token):

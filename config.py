@@ -212,6 +212,7 @@ API_CODES = _unique_codes([
     ("ACCEPT_INVITATION", "Create the account (and institution) from an invitation or signup link"),
     ("SUBMIT_INSTITUTION_REGISTRATION", "Request admin access for an institution (path C)"),
     ("CREATE_UNIVERSITY", "Create or pick a university and invite its pre-approved admin (path A)"),
+    ("CREATE_UNIVERSITY_MASTER", "Create a university from the platform form"),
     ("CREATE_STANDALONE_INSTITUTION", "Create or pick a standalone institution and invite its admin"),
     ("SEND_UNIVERSITY_SIGNUP_LINK", "Email a university signup link bound to email and AISHE code (path B)"),
     ("SEND_STANDALONE_SIGNUP_LINK", "Email a standalone institution signup link"),
